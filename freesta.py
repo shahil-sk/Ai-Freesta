@@ -53,7 +53,7 @@ AI_SITES = [
         "mobile": False,
         "input_selector": "textarea, [contenteditable='true'], input[type='text']",
         "send_selector": "button[type='submit'], button[aria-label*='send' i]",
-        "delay_ms": 200,
+        "delay_ms": 100,
     },
     {
         "name": "Perplexity Ai",
@@ -354,6 +354,24 @@ class DynamicAIWindow(QMainWindow):
 
         # Apply modern dark theme
         self.setStyleSheet(DARK_STYLESHEET)
+    
+    # Set window icon [web:109][web:113]
+    self.set_app_icon()
+
+
+    def set_app_icon(self):
+        """Set application icon from file or embedded resource."""
+        from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor
+        from PySide6.QtCore import Qt, QRect
+        import os
+
+        # Try to load icon file if it exists
+        icon_path = "icon.png"  # or "icon.ico" for Windows
+
+        if os.path.exists(icon_path):
+            icon = QIcon(icon_path)
+            self.setWindowIcon(icon)
+            QApplication.instance().setWindowIcon(icon)  # For all windows
 
         # Central widget
         self.central = QWidget()

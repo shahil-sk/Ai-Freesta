@@ -1,0 +1,402 @@
+name: Build Ai Freesta
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.11']
+        include:
+          - os: ubuntu-latest
+            artifact-name: ai-freesta-linux
+            executable-name: ai_freesta
+            archive-ext: tar.gz
+          - os: windows-latest
+            artifact-name: ai-freesta-windows
+            executable-name: ai_freesta.exe
+            archive-ext: zip
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxcb-xinerama0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-shape0 \
+            libxkbcommon-x11-0 \
+            libgl1-mesa-glx \
+            libegl1 \
+            libxcb-cursor0 \
+            libdbus-1-3 \
+            libfontconfig1 \
+            libxrender1 \
+            libxcb-glx0
+
+      - name: Create requirements.txt
+        shell: bash
+        run: |
+          cat > requirements.txt << 'EOF'
+          PySide6>=6.6.0
+          PySide6-WebEngine>=6.6.0
+          EOF
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller>=6.0.0
+
+      - name: Generate application icon
+        shell: bash
+        run: |
+          cat > generate_icon.py << 'ICONEOF'
+          from PySide6.QtGui import QPixmap, QPainter, QColor, QFont, QIcon, QRadialGradient
+          from PySide6.QtCore import Qt, QPen
+          from PySide6.QtWidgets import QApplication
+          import sys
+
+          def create_icon():
+              app = QApplication(sys.argv)
+              
+              # Create 512x512 image
+              pixmap = QPixmap(512, 512)
+              pixmap.fill(Qt.transparent)
+              
+              painter = QPainter(pixmap)
+              painter.setRenderHint(QPainter.Antialiasing)
+              painter.setRenderHint(QPainter.SmoothPixmapTransform)
+              
+              # Gradient background circle
+              gradient = QRadialGradient(256, 256, 256)
+              gradient.setColorAt(0, QColor("#007acc"))
+              gradient.setColorAt(0.7, QColor("#005a9e"))
+              gradient.setColorAt(1, QColor("#004578"))
+              
+              painter.setBrush(gradient)
+              painter.setPen(Qt.NoPen)
+              painter.drawEllipse(16, 16, 480, 480)
+              
+              # Outer ring
+              pen = QPen(QColor("#ffffff"), 8)
+              painter.setPen(pen)
+              painter.setBrush(Qt.NoBrush)
+              painter.drawEllipse(32, 32, 448, 448)
+              
+              # Draw "AI" text
+              painter.setPen(QColor("#ffffff"))
+              font = QFont("Arial", 200, QFont.Bold)
+              painter.setFont(font)
+              painter.drawText(pixmap.rect(), Qt.AlignCenter, "AI")
+              
+              painter.end()
+              
+              # Save as PNG
+              pixmap.save("icon.png", "PNG")
+              print("✅ Created icon.png")
+              
+              # For Windows .ico (multiple sizes)
+              sizes = [16, 32, 48, 64, 128, 256]
+              icon = QIcon()
+              for size in sizes:
+                  scaled = pixmap.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                  icon.addPixmap(scaled)
+              
+              # Save as ICO
+              icon.pixmap(256, 256).save("icon.ico", "ICO")
+              print("✅ Created icon.ico")
+
+          if __name__ == "__main__":
+              create_icon()
+          ICONEOF
+          
+          python generate_icon.py
+
+      - name: Verify icons created
+        shell: bash
+        run: |
+          ls -lh icon.*
+
+      - name: Create PyInstaller spec file
+        shell: bash
+        run: |
+          cat > ai_freesta.spec << 'SPECEOF'
+          # -*- mode: python ; coding: utf-8 -*-
+          import sys
+          from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+          block_cipher = None
+
+          # Collect all PySide6 data files
+          datas = collect_data_files('PySide6', include_py_files=True)
+          
+          # Add icon files
+          datas += [
+              ('icon.png', '.'),
+              ('icon.ico', '.'),
+          ]
+
+          # Collect PySide6 submodules
+          hiddenimports = collect_submodules('PySide6')
+
+          a = Analysis(
+              ['ai_freesta.py'],
+              pathex=[],
+              binaries=[],
+              datas=datas,
+              hiddenimports=hiddenimports + [
+                  'PySide6.QtWebEngineCore',
+                  'PySide6.QtWebEngineWidgets',
+                  'PySide6.QtWebChannel',
+                  'PySide6.QtPrintSupport',
+                  'PySide6.QtWebEngineQuick',
+              ],
+              hookspath=[],
+              hooksconfig={},
+              runtime_hooks=[],
+              excludes=[
+                  'tkinter',
+                  'matplotlib',
+                  'numpy',
+                  'pandas',
+                  'scipy',
+                  'PIL',
+              ],
+              win_no_prefer_redirects=False,
+              win_private_assemblies=False,
+              cipher=block_cipher,
+              noarchive=False,
+          )
+
+          pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+          exe = EXE(
+              pyz,
+              a.scripts,
+              [],
+              exclude_binaries=True,
+              name='ai_freesta',
+              debug=False,
+              bootloader_ignore_signals=False,
+              strip=False,
+              upx=True,
+              console=False,
+              disable_windowed_traceback=False,
+              argv_emulation=False,
+              target_arch=None,
+              codesign_identity=None,
+              entitlements_file=None,
+              icon='icon.ico' if sys.platform == 'win32' else 'icon.png',
+          )
+
+          coll = COLLECT(
+              exe,
+              a.binaries,
+              a.zipfiles,
+              a.datas,
+              strip=False,
+              upx=True,
+              upx_exclude=[],
+              name='ai_freesta',
+          )
+          SPECEOF
+
+      - name: Create main application file
+        shell: bash
+        run: |
+          if [ ! -f "ai_freesta.py" ]; then
+            echo "⚠️  ai_freesta.py not found, looking for alternatives..."
+            if [ -f "main.py" ]; then
+              cp main.py ai_freesta.py
+              echo "✅ Copied main.py to ai_freesta.py"
+            elif [ -f "app.py" ]; then
+              cp app.py ai_freesta.py
+              echo "✅ Copied app.py to ai_freesta.py"
+            else
+              echo "❌ No main Python file found!"
+              ls -la *.py || echo "No Python files in directory"
+              exit 1
+            fi
+          else
+            echo "✅ ai_freesta.py found"
+          fi
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --clean --noconfirm ai_freesta.spec
+
+      - name: Verify build output (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          echo "Build directory contents:"
+          ls -lah dist/ai_freesta/
+          echo ""
+          echo "Executable info:"
+          file dist/ai_freesta/ai_freesta
+          echo ""
+          echo "Checking for icon files:"
+          ls -lh dist/ai_freesta/icon.* || echo "No icon files found"
+
+      - name: Verify build output (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Write-Host "Build directory contents:"
+          Get-ChildItem -Path dist\ai_freesta\ -Recurse | Select-Object FullName, Length
+          Write-Host ""
+          Write-Host "Executable found:"
+          Test-Path dist\ai_freesta\ai_freesta.exe
+          Write-Host ""
+          Write-Host "Checking for icon files:"
+          Get-ChildItem dist\ai_freesta\icon.* -ErrorAction SilentlyContinue
+
+      - name: Create portable archive (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd dist
+          tar -czf ai-freesta-linux-x64.tar.gz ai_freesta/
+          ls -lh *.tar.gz
+          echo "Archive size: $(du -h ai-freesta-linux-x64.tar.gz | cut -f1)"
+
+      - name: Create portable archive (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          cd dist
+          Compress-Archive -Path ai_freesta -DestinationPath ai-freesta-windows-x64.zip -CompressionLevel Optimal
+          Get-ChildItem *.zip | Select-Object Name, @{Name="Size";Expression={"{0:N2} MB" -f ($_.Length / 1MB)}}
+
+      - name: Create README for archive
+        shell: bash
+        run: |
+          cat > dist/README.txt << 'READMEEOF'
+          ================================
+          Ai Freesta - Multi-AI Chat Interface
+          ================================
+
+          Thank you for downloading Ai Freesta!
+
+          QUICK START:
+          ------------
+          1. Extract the archive
+          2. Run the executable:
+             - Linux: ./ai_freesta/ai_freesta
+             - Windows: ai_freesta\ai_freesta.exe
+
+          FEATURES:
+          ---------
+          - Broadcast messages to multiple AI chats simultaneously
+          - Support for ChatGPT, Grok, Gemini, Z.AI, and custom sites
+          - Modern dark theme interface
+          - Dynamic layout switching (Horizontal, Vertical, Grid)
+          - Built-in text clear button
+          - Refresh, stop, and clear all chats
+
+          REQUIREMENTS:
+          -------------
+          - No installation required (portable)
+          - Internet connection needed
+          - Linux: X11 or Wayland display server
+          - Windows: Windows 10/11
+
+          TROUBLESHOOTING:
+          ----------------
+          - If AI sites don't respond: Click each input box once to focus
+          - Press F12 in any pane to see developer console
+          - Use "Refresh All" button to reload all sites fresh
+          
+          GitHub: https://github.com/YOUR_USERNAME/ai-freesta
+          License: MIT
+
+          Built with PySide6 and Qt WebEngine
+          READMEEOF
+
+      - name: Add README to archive (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd dist
+          tar -czf ai-freesta-linux-x64.tar.gz ai_freesta/ README.txt
+          echo "✅ Added README to archive"
+
+      - name: Add README to archive (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          cd dist
+          Remove-Item ai-freesta-windows-x64.zip
+          Compress-Archive -Path ai_freesta,README.txt -DestinationPath ai-freesta-windows-x64.zip -CompressionLevel Optimal
+          Write-Host "✅ Added README to archive"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: |
+            dist/ai-freesta-*.tar.gz
+            dist/ai-freesta-*.zip
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Create release assets
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/ai-freesta-linux-x64.tar.gz
+            dist/ai-freesta-windows-x64.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Optional: Create a build summary
+  summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: build
+    if: always()
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## 🚀 Ai Freesta Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Status" >> $GITHUB_STEP_SUMMARY
+          echo "- **Linux**: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Windows**: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Downloads" >> $GITHUB_STEP_SUMMARY
+          echo "Check the **Artifacts** section above to download builds." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### What's Included" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Multi-AI chat broadcasting" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Modern dark theme UI" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Dynamic layout switching" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Application icon" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Portable executables" >> $GITHUB_STEP_SUMMARY
