@@ -356,7 +356,7 @@ class DynamicAIWindow(QMainWindow):
         self.setStyleSheet(DARK_STYLESHEET)
     
     # Set window icon [web:109][web:113]
-    self.set_app_icon()
+        self.set_app_icon()
 
 
     def set_app_icon(self):
