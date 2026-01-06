@@ -5,5 +5,6 @@
 
 Ai Freesta is a lightweight, unofficial “knock‑off” desktop wrapper that puts multiple AI chat web apps side‑by‑side in one window (ChatGPT + Grok + Gemini). It’s meant to feel like a single workspace
 
-<img width="1692" height="1032" alt="image" src="https://github.com/user-attachments/assets/64beeaeb-e560-4d55-b3cb-a7abffa0bcb4" />
+<img width="1692" height="1032" alt="image" src="https://github.com/user-attachments/assets/cfe8ee77-c2ce-4909-ad1b-de6a5a5862d0" />
 
+@shahil-sk
