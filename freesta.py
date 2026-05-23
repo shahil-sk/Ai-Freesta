@@ -134,7 +134,6 @@ QLineEdit:focus {
     background-color: #333333;
 }
 
-/* Style the built-in clear button [web:95] */
 QLineEdit QToolButton {
     background-color: transparent;
     border: none;
@@ -292,18 +291,15 @@ console.log('[AiFreesta] Clear attempted');
 # ------------------------------ widgets ------------------------------
 
 class BroadcastLineEdit(QLineEdit):
-    """Modern styled QLineEdit with built-in clear button [web:95]."""
+    """Modern styled QLineEdit with built-in clear button."""
 
     def __init__(self, parent_window, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.parent_window = parent_window
-        
-        # Enable built-in clear button [web:95]
         self.setClearButtonEnabled(True)
 
     def keyPressEvent(self, event: QKeyEvent):
-        # Broadcast Qt key event
-    
+        # Broadcast Qt key event to all views
         for view in self.parent_window.views:
             if view is None:
                 continue
@@ -318,10 +314,7 @@ class BroadcastLineEdit(QLineEdit):
             )
             QApplication.postEvent(target, ev)
 
-        super().keyPressEvent(event)
-        self.clear()
-
-        # On Enter JS fallback
+        # On Enter: read text FIRST, then JS fallback, then clear
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):
             text = self.text()
 
@@ -329,7 +322,7 @@ class BroadcastLineEdit(QLineEdit):
                 for i, view in enumerate(self.parent_window.views):
                     if view is None or i >= len(self.parent_window.ai_sites):
                         continue
-                    
+
                     site = self.parent_window.ai_sites[i]
                     js = js_fill_and_send(
                         text,
@@ -339,7 +332,10 @@ class BroadcastLineEdit(QLineEdit):
                     )
                     view.page().runJavaScript(js)
 
+            super().keyPressEvent(event)
             self.clear()
+        else:
+            super().keyPressEvent(event)
 
 
 class DynamicAIWindow(QMainWindow):
@@ -354,24 +350,9 @@ class DynamicAIWindow(QMainWindow):
 
         # Apply modern dark theme
         self.setStyleSheet(DARK_STYLESHEET)
-    
-    # Set window icon [web:109][web:113]
-        self.set_app_icon()
 
-
-    def set_app_icon(self):
-        """Set application icon from file or embedded resource."""
-        from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor
-        from PySide6.QtCore import Qt, QRect
-        import os
-
-        # Try to load icon file if it exists
-        icon_path = "icon.png"  # or "icon.ico" for Windows
-
-        if os.path.exists(icon_path):
-            icon = QIcon(icon_path)
-            self.setWindowIcon(icon)
-            QApplication.instance().setWindowIcon(icon)  # For all windows
+        # Set window icon
+        self._set_app_icon()
 
         # Central widget
         self.central = QWidget()
@@ -380,22 +361,24 @@ class DynamicAIWindow(QMainWindow):
         self.central.setLayout(self.vlayout)
         self.setCentralWidget(self.central)
 
-        # Status bar with AI count
+        # Status bar
         self.status_label = QLabel()
         self.statusBar().addPermanentWidget(self.status_label)
-        self.statusBar().setStyleSheet("QStatusBar { background-color: #2d2d30; color: #ffffff; border-top: 1px solid #3e3e42; }")
+        self.statusBar().setStyleSheet(
+            "QStatusBar { background-color: #2d2d30; color: #ffffff; border-top: 1px solid #3e3e42; }"
+        )
 
         # Scrollable container
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
+
         self.splitter_container = QWidget()
         self.splitter_layout = QVBoxLayout()
         self.splitter_layout.setContentsMargins(0, 0, 0, 0)
         self.splitter_container.setLayout(self.splitter_layout)
-        
+
         self.scroll_area.setWidget(self.splitter_container)
         self.vlayout.addWidget(self.scroll_area)
 
@@ -406,12 +389,21 @@ class DynamicAIWindow(QMainWindow):
         self.current_root_splitter = None
         self._create_toolbar()
 
-        # Initialize
+        # Initialize views and build layout
         self._initialize_views()
         self._rebuild_layout()
         self._update_status()
 
         self.show_startup_notice_once()
+
+    def _set_app_icon(self):
+        """Set application icon from file if it exists."""
+        import os
+        icon_path = "icon.png"
+        if os.path.exists(icon_path):
+            icon = QIcon(icon_path)
+            self.setWindowIcon(icon)
+            QApplication.instance().setWindowIcon(icon)
 
     def _initialize_views(self):
         """Create initial views from AI_SITES."""
@@ -454,7 +446,6 @@ class DynamicAIWindow(QMainWindow):
         toolbar.setIconSize(toolbar.iconSize() * 1.2)
         self.addToolBar(toolbar)
 
-        # AI Management
         act_add = QAction("➕", self)
         act_add.triggered.connect(self.add_new_ai)
         act_add.setToolTip("Add a new AI chat site")
@@ -462,7 +453,6 @@ class DynamicAIWindow(QMainWindow):
 
         toolbar.addSeparator()
 
-        # Refresh Actions - Opens sites fresh [web:4]
         act_refresh_all = QAction("🔄", self)
         act_refresh_all.triggered.connect(self.refresh_all_panes)
         act_refresh_all.setToolTip("Open all AI sites fresh (clears history)")
@@ -478,27 +468,8 @@ class DynamicAIWindow(QMainWindow):
         act_clear.setToolTip("Attempt to clear all chat histories")
         toolbar.addAction(act_clear)
 
-        # toolbar.addSeparator()
-
-        # # Layout presets
-        # act_horz = QAction("▬ Horizontal", self)
-        # act_horz.triggered.connect(lambda: self._rebuild_layout("horizontal"))
-        # act_horz.setToolTip("Side-by-side layout")
-        # toolbar.addAction(act_horz)
-
-        # act_vert = QAction("▥ Vertical", self)
-        # act_vert.triggered.connect(lambda: self._rebuild_layout("vertical"))
-        # act_vert.setToolTip("Stacked layout")
-        # toolbar.addAction(act_vert)
-
-        # act_grid = QAction("⊞ Grid", self)
-        # act_grid.triggered.connect(lambda: self._rebuild_layout("grid"))
-        # act_grid.setToolTip("2x2 grid layout")
-        # toolbar.addAction(act_grid)
-
         toolbar.addSeparator()
 
-        # Help
         act_help = QAction("❓ Help", self)
         act_help.triggered.connect(self.show_help)
         act_help.setToolTip("Show usage tips")
@@ -507,13 +478,9 @@ class DynamicAIWindow(QMainWindow):
     # --------------------------- actions ----------------------------
 
     def refresh_all_panes(self):
-        """
-        Open all sites fresh by navigating to original URLs [web:4].
-        This clears session/history and starts fresh.
-        """
+        """Open all sites fresh by navigating to original URLs."""
         for i, view in enumerate(self.views):
             if view and i < len(self.ai_sites):
-                # Use setUrl() to load fresh instead of reload() [web:4][web:92]
                 original_url = self.ai_sites[i]["url"]
                 view.setUrl(QUrl(original_url))
         self.statusBar().showMessage("♻️ Opening all sites fresh...", 3000)
@@ -535,7 +502,7 @@ class DynamicAIWindow(QMainWindow):
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
-        
+
         if reply == QMessageBox.Yes:
             for view in self.views:
                 if view:
@@ -555,7 +522,7 @@ class DynamicAIWindow(QMainWindow):
             "• Switch layouts (Horizontal, Vertical, Grid)<br>"
             "• Refresh, stop, or clear all chats at once<br>"
             "• Built-in text clear button (X) in input field<br><br>"
-            
+
             "<b>Tips:</b><br>"
             "• Click each AI's input box once to focus it<br>"
             "• Click X button to clear input text quickly<br>"
@@ -564,7 +531,7 @@ class DynamicAIWindow(QMainWindow):
             "• 🔄 Refresh All opens sites completely fresh<br>"
             "• Clear All may not work on all sites<br>"
             "• Horizontal scrollbar appears when needed<br><br>"
-            
+
             "<b>Troubleshooting:</b><br>"
             "• If Enter doesn't work: Check F12 Console<br>"
             "• Edit selectors in AI_SITES config<br>"
@@ -580,7 +547,7 @@ class DynamicAIWindow(QMainWindow):
             "Add New AI Chat",
             "Enter the AI chat URL:\n(e.g., https://claude.ai)"
         )
-        
+
         if not ok or not url.strip():
             return
 
@@ -593,7 +560,7 @@ class DynamicAIWindow(QMainWindow):
             "Enter a display name:",
             text=url.split("//")[-1].split("/")[0]
         )
-        
+
         if not ok or not name.strip():
             name = url.split("//")[-1].split("/")[0]
 
@@ -641,19 +608,19 @@ class DynamicAIWindow(QMainWindow):
 
         elif style == "grid":
             root = QSplitter(Qt.Horizontal)
-            
+
             left = QSplitter(Qt.Vertical)
             for i in range(0, len(self.views), 2):
                 left.addWidget(self.views[i])
-            
+
             right = QSplitter(Qt.Vertical)
             for i in range(1, len(self.views), 2):
                 right.addWidget(self.views[i])
-            
+
             root.addWidget(left)
             if right.count() > 0:
                 root.addWidget(right)
-            
+
             root.setSizes([1, 1])
 
         else:
@@ -691,14 +658,14 @@ class DynamicAIWindow(QMainWindow):
             "2. Type in the bottom bar<br>"
             "3. Press Enter to broadcast<br>"
             "4. Click X button to clear text<br><br>"
-            
+
             "<b>Useful Buttons:</b><br>"
             "• <b>🔄 Refresh All</b> - Open sites fresh (new session)<br>"
             "• <b>🛑 Stop All</b> - Stop loading<br>"
             "• <b>🗑️ Clear All</b> - Try to clear chats<br>"
             "• <b>➕ Add AI</b> - Add more chat sites<br>"
             "• <b>X in input</b> - Clear typed text<br><br>"
-            
+
             "Click <b>❓ Help</b> button for more info!"
         )
 
@@ -715,10 +682,7 @@ class DynamicAIWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    
-    # Set application style
     app.setStyle("Fusion")
-    
     window = DynamicAIWindow(AI_SITES)
     window.show()
     sys.exit(app.exec())
