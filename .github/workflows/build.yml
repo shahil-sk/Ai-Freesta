@@ -54,7 +54,7 @@ jobs:
 
       - name: Resolve main application file
         run: |
-          if [ -f "ai_freesta.py" ]; then
+          if [ -f "freesta.py" ]; then
             echo "ai_freesta.py found"
           elif [ -f "main.py" ]; then
             cp main.py ai_freesta.py
@@ -73,6 +73,7 @@ jobs:
           pyinstaller --clean --noconfirm \
             --name ai_freesta \
             --windowed \
+            --onefile \
             --hidden-import PySide6.QtWebEngineCore \
             --hidden-import PySide6.QtWebEngineWidgets \
             --hidden-import PySide6.QtWebChannel \
@@ -135,7 +136,7 @@ jobs:
       - name: Resolve main application file
         shell: bash
         run: |
-          if [ -f "ai_freesta.py" ]; then
+          if [ -f "freesta.py" ]; then
             echo "ai_freesta.py found"
           elif [ -f "main.py" ]; then
             cp main.py ai_freesta.py
@@ -154,6 +155,7 @@ jobs:
           pyinstaller --clean --noconfirm `
             --name ai_freesta `
             --windowed `
+            --onefile `
             --hidden-import PySide6.QtWebEngineCore `
             --hidden-import PySide6.QtWebEngineWidgets `
             --hidden-import PySide6.QtWebChannel `
