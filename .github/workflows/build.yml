@@ -81,11 +81,6 @@ jobs:
             --hidden-import PySide6.QtWebEngineQuick \
             freesta.py
 
-      - name: Verify build output
-        run: |
-          ls -lah dist/ai_freesta/
-          file dist/ai_freesta/ai_freesta
-
       - name: Create archive
         run: |
           cd dist
@@ -162,12 +157,6 @@ jobs:
             --hidden-import PySide6.QtPrintSupport `
             --hidden-import PySide6.QtWebEngineQuick `
             freesta.py
-
-      - name: Verify build output
-        shell: powershell
-        run: |
-          Get-ChildItem -Path dist\ai_freesta\ | Select-Object Name, Length
-          Test-Path dist\ai_freesta\ai_freesta.exe
 
       - name: Create archive
         shell: powershell
