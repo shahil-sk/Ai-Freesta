@@ -79,7 +79,7 @@ jobs:
             --hidden-import PySide6.QtWebChannel \
             --hidden-import PySide6.QtPrintSupport \
             --hidden-import PySide6.QtWebEngineQuick \
-            ai_freesta.py
+            freesta.py
 
       - name: Verify build output
         run: |
@@ -161,7 +161,7 @@ jobs:
             --hidden-import PySide6.QtWebChannel `
             --hidden-import PySide6.QtPrintSupport `
             --hidden-import PySide6.QtWebEngineQuick `
-            ai_freesta.py
+            freesta.py
 
       - name: Verify build output
         shell: powershell
